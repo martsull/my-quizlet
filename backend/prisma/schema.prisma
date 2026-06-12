@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id                String    @id @default(uuid())
+  name              String    @unique
+  description       String?
+  cardCount         Int       @default(0) @map("card_count")
+  lastReorganizedAt DateTime? @map("last_reorganized_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  cards             Card[]
+
+  @@map("categories")
+}
+
+model Card {
+  id             String    @id @default(uuid())
+  english        String
+  russian        String
+  pronunciation  String?
+  exampleEn      String?   @map("example_en")
+  exampleRu      String?   @map("example_ru")
+  categoryId     String?   @map("category_id")
+  difficulty     Int       @default(0)
+  successCount   Int       @default(0) @map("success_count")
+  failureCount   Int       @default(0) @map("failure_count")
+  lastReviewedAt DateTime? @map("last_reviewed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  category       Category? @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId], name: "idx_cards_category")
+  @@map("cards")
+}
