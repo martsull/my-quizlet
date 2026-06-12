@@ -1,45 +1,137 @@
 # My Quizlet
 
-Personal English vocabulary flashcard PWA — React + Node.js + PostgreSQL + Groq AI.
+Personal English vocabulary flashcard PWA.
 
-## Quick Start
+**Production stack:** GitHub Pages → Cloudflare Worker → Neon PostgreSQL
 
-### 1. Start the database
+---
 
-```bash
-docker compose up -d
+## Architecture
+
+```
+GitHub Pages  (frontend PWA)
+      ↓  HTTPS
+Cloudflare Worker  (Hono API — vocab-api.*.workers.dev)
+      ↓  SQL over HTTP
+Neon PostgreSQL  (serverless Postgres)
 ```
 
-### 2. Backend
+---
+
+## Repository layout
+
+```
+my-quizlet/
+├── frontend/          React + Vite PWA  →  GitHub Pages
+├── worker/            Hono API          →  Cloudflare Worker
+├── scripts/           AI import tools   →  run locally against Neon
+├── backend/           Express scaffold  (local dev reference, not deployed)
+└── .github/workflows/ CI/CD pipelines
+```
+
+---
+
+## First-time setup
+
+### 1. Neon database
+
+1. Create a free project at [neon.tech](https://neon.tech)
+2. Copy the connection string: `postgresql://user:pass@host/db?sslmode=require`
+3. Run the Prisma migration from the backend folder to create the schema:
 
 ```bash
 cd backend
-cp .env.example .env         # adjust DATABASE_URL if needed
+cp .env.example .env         # paste your Neon DATABASE_URL
 npm install
-npm run db:migrate:dev       # runs Prisma migrations
-npm run dev                  # http://localhost:3000
+npx prisma migrate deploy
 ```
 
-### 3. Frontend
+---
+
+### 2. Cloudflare Worker
+
+```bash
+cd worker
+npm install
+npx wrangler login
+
+# Store the Neon connection string as a secret (not in wrangler.toml)
+npx wrangler secret put DATABASE_URL
+
+# Deploy
+npm run deploy
+# → note the *.workers.dev URL it prints
+```
+
+---
+
+### 3. GitHub repository
+
+```bash
+# Create repo on github.com, then:
+git remote add origin https://github.com/YOUR_USERNAME/my-quizlet.git
+git push -u origin main
+```
+
+Add these **Repository Secrets** (Settings → Secrets → Actions):
+
+| Secret | Value |
+|--------|-------|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token with Worker:Edit permission |
+| `DATABASE_URL` | Neon connection string |
+| `VITE_API_URL` | Your worker URL, e.g. `https://vocab-api.xyz.workers.dev` |
+
+Enable GitHub Pages (Settings → Pages → Source: `gh-pages` branch).
+
+On every push to `main`:
+- Changes in `frontend/` → auto-deploys to GitHub Pages
+- Changes in `worker/` → auto-deploys to Cloudflare
+
+---
+
+## Local development
+
+### Frontend (against production worker)
 
 ```bash
 cd frontend
+cp .env.example .env         # set VITE_API_URL to your worker URL
 npm install
 npm run dev                  # http://localhost:5173
 ```
 
-Open http://localhost:5173. The frontend proxies `/api` → backend.
+### Frontend (against local Express backend)
+
+```bash
+# Terminal 1 — start local Postgres
+docker compose up -d
+
+# Terminal 2 — start Express backend
+cd backend && cp .env.example .env && npm install && npm run dev
+
+# Terminal 3 — start frontend (proxy → localhost:3000)
+cd frontend
+# VITE_API_URL must be unset so the Vite proxy kicks in
+npm run dev
+```
+
+### Worker (local)
+
+```bash
+cd worker
+cp .env.example .dev.vars    # wrangler reads .dev.vars for local secrets
+npm run dev                  # http://localhost:8787
+```
 
 ---
 
-## Import Words
+## Import words with AI
 
 ```bash
 cd scripts
 cp .env.example .env         # set DATABASE_URL + GROQ_API_KEY
 npm install
 
-# Create a plain-text file, one word/phrase per line
 cat > words.txt <<EOF
 latency
 throughput
@@ -50,113 +142,49 @@ EOF
 npx ts-node importWords.ts words.txt
 ```
 
-The script:
-1. Deduplicates against existing cards (case-insensitive, plural variants, hyphen variants)
-2. Sends to Groq for translation, pronunciation, example sentence, and category
-3. Upserts categories and inserts cards
-4. Prints an import report
-
 ---
 
-## Reorganise Categories
+## Reorganise categories
 
 ```bash
 cd scripts
 npx ts-node reorganizeCategories.ts
 ```
 
-Analyses all categories and cards with AI:
-- **Splits** categories with > 60 cards into focused subcategories
-- **Merges** categories with < 10 cards into nearest peers
-- Prints a reorganisation report
-
 ---
 
-## Project Structure
-
-```
-my-quizlet/
-├── backend/                  Node.js + Express + Prisma
-│   ├── prisma/schema.prisma
-│   └── src/
-│       ├── repositories/     Data access layer
-│       ├── services/         Business logic
-│       ├── routes/           Express route handlers
-│       └── middleware/       Error handling
-├── frontend/                 React + Vite PWA
-│   └── src/
-│       ├── components/       Reusable UI
-│       ├── hooks/            React Query hooks + session logic
-│       ├── pages/            Home, Study, Search
-│       └── services/api.ts   Typed fetch wrapper
-├── scripts/                  AI-powered CLI tools
-│   ├── importWords.ts
-│   └── reorganizeCategories.ts
-└── docker-compose.yml        PostgreSQL
-```
-
----
-
-## API Reference
+## API reference
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/categories` | All categories with card count |
 | GET | `/cards` | All cards (weighted shuffle) |
-| GET | `/cards?categoryId=<id>` | Cards in a category |
-| GET | `/cards/difficult` | Cards with difficulty > 3, sorted |
+| GET | `/cards?categoryId=<id>` | Cards in category |
+| GET | `/cards/difficult` | difficulty > 3, sorted desc |
 | GET | `/cards/search?q=<query>` | Full-text search |
-| POST | `/cards/:id/review` | `{ known: true/false }` — updates stats |
+| POST | `/cards/:id/review` | `{ known: true\|false }` — update stats |
 | GET | `/health` | Health check |
 
 ---
 
-## Learning Algorithm
+## Environment variables
 
-- Cards start in a weighted-shuffled queue (harder cards tend to come first)
-- **I Know** → card removed from queue, `success_count++`, `difficulty--`
-- **I Don't Know** → card reinserted 3 positions later, `failure_count++`, `difficulty++`
-- Session ends when queue is empty; user can repeat or go back
+### Frontend
 
----
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_API_URL` | prod only | Worker URL |
+| `VITE_BASE_PATH` | CI only | GitHub Pages base path (e.g. `/my-quizlet/`) |
 
-## PWA
+### Worker (secrets via `wrangler secret put`)
 
-The frontend is a fully offline-capable PWA:
-- Install via browser "Add to Home Screen"
-- Cached shell + API responses via Workbox
-- Mobile-first dark design, safe-area aware
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | yes | Neon connection string |
 
----
+### Scripts
 
-## Environment Variables
-
-### Backend `.env`
-
-```
-DATABASE_URL=postgresql://quizlet:quizlet@localhost:5432/quizlet
-PORT=3000
-NODE_ENV=development
-CORS_ORIGIN=http://localhost:5173
-```
-
-### Scripts `.env`
-
-```
-DATABASE_URL=postgresql://quizlet:quizlet@localhost:5432/quizlet
-GROQ_API_KEY=gsk_...
-```
-
-### Frontend (optional)
-
-```
-VITE_API_URL=http://localhost:3000   # default: /api (uses Vite proxy in dev)
-```
-
----
-
-## Deployment
-
-**Frontend** — build with `npm run build`, deploy `dist/` to any static host (Vercel, Netlify, Cloudflare Pages). Set `VITE_API_URL` to your backend URL.
-
-**Backend** — build with `npm run build`, deploy `dist/` to any Node host (Railway, Fly.io, Render). Run `npm run db:migrate` on startup.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | yes | Neon connection string |
+| `GROQ_API_KEY` | yes | Groq API key |
