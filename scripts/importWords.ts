@@ -63,18 +63,23 @@ return a JSON array where each element has exactly these fields:
   - pronunciation: English phonetic pronunciation guide (e.g. "LAY-ten-see")
   - exampleEn: one natural English sentence using the word (max 15 words)
   - exampleRu: the Russian translation of exampleEn
-  - category: the best matching category name from the existing list, or a
-              new category name if none fits.
+  - category: category name (see strict rules below)
 
-Rules for categories:
-  - Target 20–40 cards per category. Prefer existing categories when relevant.
-  - Create a new category only when no existing one is a reasonable match.
-  - Category names must be in English, 2–4 words, title-cased.
-  - Avoid mega-categories (e.g. "Software Engineering") — prefer specific ones
-    (e.g. "Distributed Systems", "Backend Architecture").
-  - Never exceed 60 cards in one category — split proactively.
+STRICT category rules — follow exactly:
+  1. ALWAYS prefer an existing category over creating a new one.
+     If a word can reasonably belong to an existing category, use it.
+  2. Group words together aggressively. Do NOT create a separate category
+     for each word. A category with 1–5 words is WRONG.
+  3. Create a new category ONLY when none of the existing ones fit at all.
+  4. When you must create a new category, make it broad enough to hold
+     at least 15–30 words (think ahead — other words will be added later).
+  5. Good categories: "Everyday English", "Tech Vocabulary",
+     "Emotions And Personality", "Formal English", "Idioms And Phrases".
+     Bad categories: "Adverbs", "Pronouns", "Colors", "Sleep" (too narrow).
+  6. Category names: English, 2–4 words, title-cased.
+  7. Maximum 6 total distinct categories across all words in this batch.
 
-Existing categories:
+Existing categories (USE THESE FIRST):
 ${catList}
 
 Words to process:
@@ -99,9 +104,13 @@ async function main(): Promise<void> {
   }
 
   const raw = fs.readFileSync(absPath, "utf-8");
+
+  // Support multiple formats:
+  //   one word per line: latency\nthroughput
+  //   comma-separated with any quotes: «word», "word", 'word', word
   const words = raw
-    .split("\n")
-    .map((l) => l.trim())
+    .split(/[\n,]+/)
+    .map((w) => w.replace(/[«»"'`]/g, "").trim())
     .filter(Boolean);
 
   if (words.length === 0) {
@@ -154,7 +163,7 @@ async function main(): Promise<void> {
       );
 
       const completion = await groq.chat.completions.create({
-        model: "llama3-70b-8192",
+        model: "llama-3.3-70b-versatile",
         messages: [
           {
             role: "user",

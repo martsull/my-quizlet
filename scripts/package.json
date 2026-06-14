@@ -3,16 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "import-words": "ts-node --esm importWords.ts",
-    "reorganize": "ts-node --esm reorganizeCategories.ts"
+    "import": "NODE_PATH=../backend/node_modules ts-node --transpile-only importWords.ts words.txt",
+    "import-words": "NODE_PATH=../backend/node_modules ts-node --transpile-only importWords.ts",
+    "reorganize": "NODE_PATH=../backend/node_modules ts-node --transpile-only reorganizeCategories.ts"
   },
   "dependencies": {
-    "@prisma/client": "^5.14.0",
     "groq-sdk": "^0.3.3"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
-    "prisma": "^5.14.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   }

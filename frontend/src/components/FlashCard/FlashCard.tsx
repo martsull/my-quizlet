@@ -61,24 +61,22 @@ export function FlashCard({ card, onKnown, onUnknown }: FlashCardProps) {
         </div>
       </div>
 
-      {flipped && (
-        <div className="flashcard-actions">
-          <button
-            className="btn btn--danger"
-            onClick={onUnknown}
-            aria-label="I don't know this word"
-          >
-            I Don&apos;t Know
-          </button>
-          <button
-            className="btn btn--success"
-            onClick={onKnown}
-            aria-label="I know this word"
-          >
-            I Know
-          </button>
-        </div>
-      )}
+      <div className="flashcard-actions">
+        <button
+          className="btn btn--danger"
+          onClick={onUnknown}
+          aria-label="I don't know this word"
+        >
+          I Don&apos;t Know
+        </button>
+        <button
+          className="btn btn--success"
+          onClick={onKnown}
+          aria-label="I know this word"
+        >
+          I Know
+        </button>
+      </div>
     </div>
   );
 }
