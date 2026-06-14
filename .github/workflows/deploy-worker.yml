@@ -2,7 +2,7 @@ name: Deploy Worker → Cloudflare
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "worker/**"
       - ".github/workflows/deploy-worker.yml"
